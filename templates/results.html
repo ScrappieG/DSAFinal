@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1 class="text-center">Results</h1>
+<div id="results-container">
+    {% if path %}
+        <h3>Shortest Path</h3>
+        <ol>
+            {% for page in path %}
+                <li>{{ page }}</li>
+            {% endfor %}
+        </ol>
+    {% elif error %}
+        <div class="alert alert-danger">
+            {{ error }}
+        </div>
+    {% else %}
+        <p>No path found between the specified pages.</p>
+    {% endif %}
+
+    <h3>Checked Links (Debugging)</h3>
+    <pre>
+        {{ checked_links|join(', ') }}
+    </pre>
+</div>
+
+<a href="/" class="btn btn-secondary mt-4">Try Again</a>
+{% endblock %}

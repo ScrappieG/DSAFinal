@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-5">
+    <h1 class="text-center mb-4">Find the Shortest Path Between Wikipedia Pages</h1>
+
+    <div class="card shadow p-4">
+        <form method="POST" action="/find_path">
+
+            <div class="form-group mb-3">
+                <label for="start" class="form-label"><strong>Start Page</strong></label>
+                <input
+                    type="text"
+                    class="form-control"
+                    id="start"
+                    name="start"
+                    placeholder="Enter the starting Wikipedia page (e.g., Albert Einstein)"
+                    required>
+            </div>
+
+            <div class="form-group mb-4">
+                <label for="end" class="form-label"><strong>End Page</strong></label>
+                <input
+                    type="text"
+                    class="form-control"
+                    id="end"
+                    name="end"
+                    placeholder="Enter the target Wikipedia page (e.g., Quantum Mechanics)"
+                    required>
+            </div>
+
+            <!-- Submit Button -->
+            <div class="d-grid">
+                <button type="submit" class="btn btn-primary btn-lg">Find Path</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
