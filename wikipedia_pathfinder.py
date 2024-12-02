@@ -92,7 +92,7 @@ class WikipediaPathfinder:
         fetches links and the last time it was revised from a wiki page
         """
         last_stored_revision = self.db_handler.get_last_revision(page_title)
-        current_revision = self._fetch_last_revision(page_title)
+        current_revision = self.fetch_last_revision(page_title)
 
         if last_stored_revision == current_revision:
             print(f"page '{page_title}' is up-to-date (revision: {current_revision}).")
@@ -115,7 +115,7 @@ class WikipediaPathfinder:
             return
 
         print(f"Loading links for: {page_title} (depth={depth})")
-        self.load_links_with_revision(page_title)
+        self.load_links_for_db(page_title)
 
         source_id = self.db_handler.get_page_id_by_title(page_title)
         if not source_id:
@@ -127,16 +127,33 @@ class WikipediaPathfinder:
             neighbor_title = self.db_handler.get_page_title_by_id(neighbor_id)
             self.load_links_recursively(neighbor_title, depth - 1)
 
+    def fetch_links_and_update_db(self, page_title):
+        """
+        fetch links for a page and update the database
+        """
+        print(f"Fetching links for: {page_title}")
+        links = self.fetch_links_from_api(page_title)
+        source_id = self.db_handler.get_page_id(page_title)
+        for target_title in links:
+            target_id = self.addVertice(target_title)
+            self.insertEdge(source_id, target_id)
+
     def bfs(self, start_title, target_title):
         """
-        performs a BFS to find any path between start_title and target_title
+        performs bfs traversal
         """
-        start_id = self.db_handler.get_page_id_by_title(start_title)
-        target_id = self.db_handler.get_page_id_by_title(target_title)
+        start_id = self.db_handler.get_page_id(start_title)
+        target_id = self.db_handler.get_page_id(target_title)
 
-        if start_id is None or target_id is None:
-            print(f"start or target page not found in the database.")
-            return None, set()
+        if start_id is None:
+            print(f"Start page '{start_title}' not found in the database. Fetching...")
+            self.fetch_links_and_update_db(start_title)
+            start_id = self.db_handler.get_page_id(start_title)
+
+        if target_id is None:
+            print(f"Target page '{target_title}' not found in the database. Fetching...")
+            self.fetch_links_and_update_db(target_title)
+            target_id = self.db_handler.get_page_id(target_title)
 
         queue = deque([(start_id, [start_id])])
         visited = set()
@@ -151,23 +168,35 @@ class WikipediaPathfinder:
             if current_id == target_id:
                 return [self.db_handler.get_page_title_by_id(pid) for pid in path], visited
 
-            for neighbor_id in self.db_handler.get_neighbors(current_id):
+            neighbors = self.db_handler.get_neighbors(current_id)
+            if not neighbors:
+                print(f"Neighbors not found for page ID {current_id}. Fetching links...")
+                self.fetch_links_and_update_db(self.db_handler.get_page_title_by_id(current_id))
+                neighbors = self.db_handler.get_neighbors(current_id)
+
+            for neighbor_id in neighbors:
                 if neighbor_id not in visited:
                     queue.append((neighbor_id, path + [neighbor_id]))
 
-        print(f"no path found between '{start_title}' and '{target_title}'.")
+        print(f"No path found between '{start_title}' and '{target_title}'.")
         return None, visited
 
     def dijkstra(self, start_title, target_title):
         """
-        Performs Dijkstra's algorithm to find the shortest path between start_title and target_title.
+        performs Dijkstra's algorithm
         """
-        start_id = self.db_handler.get_page_id_by_title(start_title)
-        target_id = self.db_handler.get_page_id_by_title(target_title)
+        start_id = self.db_handler.get_page_id(start_title)
+        target_id = self.db_handler.get_page_id(target_title)
 
-        if start_id is None or target_id is None:
-            print(f"Start or target page not found in the database.")
-            return None, set()
+        if start_id is None:
+            print(f"Start page '{start_title}' not found in the database. Fetching...")
+            self.fetch_links_and_update_db(start_title)
+            start_id = self.db_handler.get_page_id(start_title)
+
+        if target_id is None:
+            print(f"Target page '{target_title}' not found in the database. Fetching...")
+            self.fetch_links_and_update_db(target_title)
+            target_id = self.db_handler.get_page_id(target_title)
 
         priority_queue = [(0, start_id, [start_id])]
         visited = set()
@@ -183,12 +212,16 @@ class WikipediaPathfinder:
             if current_id == target_id:
                 return [self.db_handler.get_page_title_by_id(pid) for pid in path], visited
 
-            for neighbor_id, edge_weight in self.db_handler.get_neighbors_with_weights(current_id):
+            neighbors = self.db_handler.get_neighbors(current_id)
+            if not neighbors:
+                print(f"Neighbors not found for page ID {current_id}. Fetching links...")
+                self.fetch_links_and_update_db(self.db_handler.get_page_title_by_id(current_id))
+                neighbors = self.db_handler.get_neighbors(current_id)
+
+            for neighbor_id in neighbors:
                 if neighbor_id in visited:
                     continue
-
-                new_cost = current_cost + edge_weight
-
+                new_cost = current_cost + 1
                 if neighbor_id not in shortest_distances or new_cost < shortest_distances[neighbor_id]:
                     shortest_distances[neighbor_id] = new_cost
                     heapq.heappush(priority_queue, (new_cost, neighbor_id, path + [neighbor_id]))

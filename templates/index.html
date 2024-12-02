@@ -6,7 +6,6 @@
 
     <div class="card shadow p-4">
         <form method="POST" action="/find_path">
-
             <div class="form-group mb-3">
                 <label for="start" class="form-label"><strong>Start Page</strong></label>
                 <input
@@ -18,7 +17,7 @@
                     required>
             </div>
 
-            <div class="form-group mb-4">
+            <div class="form-group mb-3">
                 <label for="end" class="form-label"><strong>End Page</strong></label>
                 <input
                     type="text"
@@ -29,7 +28,16 @@
                     required>
             </div>
 
-            <!-- Submit Button -->
+            <!-- algorithm selection dropdown -->
+            <div class="form-group mb-4">
+                <label for="algorithm" class="form-label"><strong>Select Algorithm</strong></label>
+                <select class="form-control" id="algorithm" name="algorithm" required>
+                    <option value="bfs">Breadth-First Search (BFS)</option>
+                    <option value="dijkstra">Dijkstra's Algorithm</option>
+                </select>
+            </div>
+
+            <!-- submit button -->
             <div class="d-grid">
                 <button type="submit" class="btn btn-primary btn-lg">Find Path</button>
             </div>
