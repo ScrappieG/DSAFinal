@@ -1,6 +1,7 @@
 from collections import deque
 import requests
 from sqlite_handler import SQLiteHandler
+import heapq
 
 
 class WikipediaPathfinder:
@@ -155,4 +156,42 @@ class WikipediaPathfinder:
                     queue.append((neighbor_id, path + [neighbor_id]))
 
         print(f"no path found between '{start_title}' and '{target_title}'.")
+        return None, visited
+
+    def dijkstra(self, start_title, target_title):
+        """
+        Performs Dijkstra's algorithm to find the shortest path between start_title and target_title.
+        """
+        start_id = self.db_handler.get_page_id_by_title(start_title)
+        target_id = self.db_handler.get_page_id_by_title(target_title)
+
+        if start_id is None or target_id is None:
+            print(f"Start or target page not found in the database.")
+            return None, set()
+
+        priority_queue = [(0, start_id, [start_id])]
+        visited = set()
+        shortest_distances = {start_id: 0}
+
+        while priority_queue:
+            current_cost, current_id, path = heapq.heappop(priority_queue)
+
+            if current_id in visited:
+                continue
+            visited.add(current_id)
+
+            if current_id == target_id:
+                return [self.db_handler.get_page_title_by_id(pid) for pid in path], visited
+
+            for neighbor_id, edge_weight in self.db_handler.get_neighbors_with_weights(current_id):
+                if neighbor_id in visited:
+                    continue
+
+                new_cost = current_cost + edge_weight
+
+                if neighbor_id not in shortest_distances or new_cost < shortest_distances[neighbor_id]:
+                    shortest_distances[neighbor_id] = new_cost
+                    heapq.heappush(priority_queue, (new_cost, neighbor_id, path + [neighbor_id]))
+
+        print(f"No path found between '{start_title}' and '{target_title}'.")
         return None, visited
