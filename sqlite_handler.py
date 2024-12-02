@@ -9,23 +9,14 @@ class SQLiteHandler:
         self.conn = sqlite3.connect(self.db_path)
 
     def database_connect(self):
-        """
-        creates a new connection and cursor to the database.
-        """
         self.conn = sqlite3.connect(self.db_path)
         self.conn.row_factory = sqlite3.Row
         self.cursor = self.conn.cursor()
 
     def database_close(self):
-        """
-        closes the current SQLite connection.
-        """
         self.conn.close()
 
     def setup_database(self):
-        """
-        sets up the sqlite database using .sql file.
-        """
         self.database_connect()
         try:
             with open(self.schema_file, 'r') as file:
@@ -39,9 +30,6 @@ class SQLiteHandler:
             self.database_close()
 
     def get_page_id(self, title):
-        """
-        retrieves the page ID for a given title, creating it if it doesn't exist.
-        """
         self.database_connect()
         title = title.strip().lower()
         try:
@@ -60,9 +48,6 @@ class SQLiteHandler:
             self.database_close()
 
     def insert_link(self, source_id, target_id):
-        """
-        Inserts a link between two pages into the database.
-        """
         self.database_connect()
         try:
             self.cursor.execute("INSERT OR IGNORE INTO links (source_id, target_id) VALUES (?, ?)", (source_id, target_id))
@@ -72,37 +57,27 @@ class SQLiteHandler:
         finally:
             self.database_close()
 
-    def add_or_update_page(self, title, last_revision):
-        """
-        adds a page to the database or updates its last revision timestamp.
-        """
+    def add_or_update_page(self, title):
         self.database_connect()
         try:
-            self.cursor.execute(
-                "INSERT INTO pages (title, last_revision) VALUES (?, ?) "
-                "ON CONFLICT(title) DO UPDATE SET last_revision = excluded.last_revision",
-                (title.strip().lower(), last_revision)
-            )
-            self.conn.commit()
-            self.cursor.execute("SELECT id FROM pages WHERE title = ?", (title.strip().lower(),))
-            return self.cursor.fetchone()[0]
+            title = title.strip().lower()
+            # Check if the page already exists
+            self.cursor.execute("SELECT id FROM pages WHERE title = ?", (title,))
+            result = self.cursor.fetchone()
+            if result:
+                return result["id"]  # Return the existing ID
+            else:
+                # Insert the new page
+                self.cursor.execute("INSERT INTO pages (title) VALUES (?)", (title,))
+                self.conn.commit()
+                return self.cursor.lastrowid  # Return the new ID
         except sqlite3.Error as e:
-            print(f"Error adding/updating page '{title}': {e}")
+            print(f"Error in add_or_update_page: {e}")
             return None
-
-    def get_last_revision(self, title):
-        """
-        retrieves the last revision date for a given page title.
-        """
-        self.database_connect()
-        self.cursor.execute("SELECT last_revision FROM pages WHERE title = ?", (title.strip().lower(),))
-        result = self.cursor.fetchone()
-        return result[0] if result else None
+        finally:
+            self.database_close()
 
     def get_neighbors(self, page_id):
-        """
-        retrieves the neighbors (edges) for a given page ID.
-        """
         self.database_connect()
         try:
             self.cursor.execute("SELECT target_id FROM links WHERE source_id = ?", (page_id,))
@@ -114,9 +89,6 @@ class SQLiteHandler:
             self.database_close()
 
     def get_page_title_by_id(self, page_id):
-        """
-        retrieves the title of a page by its ID.
-        """
         self.database_connect()
         try:
             self.cursor.execute("SELECT title FROM pages WHERE id = ?", (page_id,))
@@ -129,9 +101,6 @@ class SQLiteHandler:
             self.database_close()
 
     def get_page_id_by_title(self, title):
-        """
-        retrieves the page id for a given title
-        """
         self.database_connect()
         title = title.strip().lower()
         try:

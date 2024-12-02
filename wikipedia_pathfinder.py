@@ -13,8 +13,7 @@ class WikipediaPathfinder:
 
     def addVertice(self, title):
         """
-        adds a vertex database if it doesn't already exist
-        returns the unique id for the vertex
+        adds a vertex to the database if it doesn't already exist
         """
         return self.db_handler.get_page_id(title)
 
@@ -23,32 +22,6 @@ class WikipediaPathfinder:
         adds a directed edge between two pages in the database
         """
         self.db_handler.insert_link(source_id, target_id)
-
-    def fetch_last_revision(self, page_title):
-        """
-        fetches the last revision date of a wikipedia page using the mediawiki API
-        """
-        url = "https://en.wikipedia.org/w/api.php"
-        params = {
-            "action": "query",
-            "prop": "revisions",
-            "titles": page_title,
-            "rvslots": "*",
-            "rvprop": "timestamp",
-            "format": "json"
-        }
-        try:
-            response = requests.get(url, params=params)
-            response.raise_for_status()
-            data = response.json()
-            pages = data.get("query", {}).get("pages", {})
-            for page_id, page_data in pages.items():
-                revisions = page_data.get("revisions", [])
-                if revisions:
-                    return revisions[0]["timestamp"]
-        except requests.RequestException as e:
-            print(f"Error fetching revision for page '{page_title}': {e}")
-        return None
 
     def fetch_links_from_api(self, page_title):
         """
@@ -61,8 +34,8 @@ class WikipediaPathfinder:
             "action": "query",
             "titles": page_title,
             "prop": "links",
-            "plnamespace": "0",  # only include main namespace links
-            "pllimit": "max",    # maximum number of links grabbed
+            "plnamespace": "0",  # Only include main namespace links
+            "pllimit": "max",    # Maximum number of links grabbed
             "format": "json",
             "redirects": 1,
         }
@@ -85,74 +58,41 @@ class WikipediaPathfinder:
                 print(f"Error fetching links for '{page_title}': {e}")
                 break
 
+        # Insert fetched links into the database
+        for target_title in links:
+            target_id = self.addVertice(target_title)
+            self.insertEdge(page_id, target_id)
+
         return links
 
-    def load_links_for_db(self, page_title):
+    def load_links_for_page(self, page_title):
         """
-        fetches links and the last time it was revised from a wiki page
+        Loads links for a page. If the links are not already in the database, fetches them from the API.
         """
-        last_stored_revision = self.db_handler.get_last_revision(page_title)
-        current_revision = self.fetch_last_revision(page_title)
+        page_id = self.db_handler.get_page_id(page_title)
+        neighbors = self.db_handler.get_neighbors(page_id)
 
-        if last_stored_revision == current_revision:
-            print(f"page '{page_title}' is up-to-date (revision: {current_revision}).")
-            return
-
-        print(f"fetching links for '{page_title}' (New Revision: {current_revision}).")
-        links = self.fetch_links_from_api(page_title)
-        source_id = self.db_handler.add_or_update_page(page_title, current_revision)
-
-        for target_title in links:
-            target_id = self.addVertice(target_title)
-            self.insertEdge(source_id, target_id)
-
-    def load_links_recursively(self, page_title, depth=2):
-        """
-        recursively loads links from a wikipedia page, if revision is up to date it skips it
-        """
-        if depth == 0:
-            print(f"Skipping page '{page_title}' (depth={depth}).")
-            return
-
-        print(f"Loading links for: {page_title} (depth={depth})")
-        self.load_links_for_db(page_title)
-
-        source_id = self.db_handler.get_page_id_by_title(page_title)
-        if not source_id:
-            print(f"page '{page_title}' not found in the database: skipping recursion.")
-            return
-
-        neighbors = self.db_handler.get_neighbors(source_id)
-        for neighbor_id in neighbors:
-            neighbor_title = self.db_handler.get_page_title_by_id(neighbor_id)
-            self.load_links_recursively(neighbor_title, depth - 1)
-
-    def fetch_links_and_update_db(self, page_title):
-        """
-        fetch links for a page and update the database
-        """
-        print(f"Fetching links for: {page_title}")
-        links = self.fetch_links_from_api(page_title)
-        source_id = self.db_handler.get_page_id(page_title)
-        for target_title in links:
-            target_id = self.addVertice(target_title)
-            self.insertEdge(source_id, target_id)
+        if not neighbors:
+            print(f"Links for page '{page_title}' not found in the database. Fetching from API...")
+            self.fetch_links_from_api(page_title)
+        else:
+            print(f"Links for page '{page_title}' already exist in the database.")
 
     def bfs(self, start_title, target_title):
         """
-        performs bfs traversal
+        performs BFS traversal to find any path between start_title and target_title
         """
         start_id = self.db_handler.get_page_id(start_title)
         target_id = self.db_handler.get_page_id(target_title)
 
         if start_id is None:
             print(f"Start page '{start_title}' not found in the database. Fetching...")
-            self.fetch_links_and_update_db(start_title)
+            self.fetch_links_from_api(start_title)
             start_id = self.db_handler.get_page_id(start_title)
 
         if target_id is None:
             print(f"Target page '{target_title}' not found in the database. Fetching...")
-            self.fetch_links_and_update_db(target_title)
+            self.fetch_links_from_api(target_title)
             target_id = self.db_handler.get_page_id(target_title)
 
         queue = deque([(start_id, [start_id])])
@@ -170,8 +110,8 @@ class WikipediaPathfinder:
 
             neighbors = self.db_handler.get_neighbors(current_id)
             if not neighbors:
-                print(f"Neighbors not found for page ID {current_id}. Fetching links...")
-                self.fetch_links_and_update_db(self.db_handler.get_page_title_by_id(current_id))
+                print(f"No neighbors found for page ID {current_id}. Fetching links...")
+                self.fetch_links_from_api(self.db_handler.get_page_title_by_id(current_id))
                 neighbors = self.db_handler.get_neighbors(current_id)
 
             for neighbor_id in neighbors:
@@ -183,19 +123,19 @@ class WikipediaPathfinder:
 
     def dijkstra(self, start_title, target_title):
         """
-        performs Dijkstra's algorithm
+        performs Dijkstras algorithm to find the shortest path between two pages
         """
         start_id = self.db_handler.get_page_id(start_title)
         target_id = self.db_handler.get_page_id(target_title)
 
         if start_id is None:
             print(f"Start page '{start_title}' not found in the database. Fetching...")
-            self.fetch_links_and_update_db(start_title)
+            self.fetch_links_from_api(start_title)
             start_id = self.db_handler.get_page_id(start_title)
 
         if target_id is None:
             print(f"Target page '{target_title}' not found in the database. Fetching...")
-            self.fetch_links_and_update_db(target_title)
+            self.fetch_links_from_api(target_title)
             target_id = self.db_handler.get_page_id(target_title)
 
         priority_queue = [(0, start_id, [start_id])]
@@ -214,8 +154,8 @@ class WikipediaPathfinder:
 
             neighbors = self.db_handler.get_neighbors(current_id)
             if not neighbors:
-                print(f"Neighbors not found for page ID {current_id}. Fetching links...")
-                self.fetch_links_and_update_db(self.db_handler.get_page_title_by_id(current_id))
+                print(f"No neighbors found for page ID {current_id}. Fetching links...")
+                self.fetch_links_from_api(self.db_handler.get_page_title_by_id(current_id))
                 neighbors = self.db_handler.get_neighbors(current_id)
 
             for neighbor_id in neighbors:
